@@ -1,0 +1,86 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>우리 대화 연구소 v1.2</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#252936;background:#f7f7fb}*{box-sizing:border-box}body{margin:0}.wrap{max-width:650px;margin:auto;padding:22px 18px 55px}h1{font-size:27px;margin:8px 0}p{line-height:1.55;color:#616575}.tag{color:#7b5bd6;font-weight:700;font-size:13px}.card{background:white;border:1px solid #ececf1;border-radius:19px;padding:19px;margin:15px 0;box-shadow:0 3px 12px #25293608}button,.upload{display:block;width:100%;border:0;border-radius:13px;padding:14px;font-size:15px;font-weight:700;text-align:center;background:#7054d5;color:white;cursor:pointer}.upload input{display:none}button.secondary{background:#f0edff;color:#6049bd;margin-top:10px}.muted{font-size:12px;color:#777d8a}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{padding:15px;background:#f7f6fc;border-radius:13px}.metric strong{font-size:23px;display:block;margin-bottom:5px}.metric span{font-size:12px;color:#777}.bar{display:flex;height:15px;border-radius:20px;overflow:hidden;background:#ddd}.bar>div:first-child{background:#7459db}.bar>div:last-child{background:#e6a2bc}.line{display:flex;justify-content:space-between;margin:12px 0;font-size:14px;gap:12px}.rowbar{height:9px;background:#efedf5;border-radius:9px;overflow:hidden}.rowbar div{height:100%;background:#947ce5}.hidden{display:none}.error{color:#bc3355}.pill{display:inline-block;padding:5px 9px;border-radius:20px;background:#f1edff;color:#6049bd;font-size:12px;margin:3px}footer{font-size:12px;color:#888;line-height:1.6} .report-page{border:1px solid #e9e5f4;border-radius:14px;padding:17px;margin:12px 0;break-inside:avoid;background:#fdfcff}.report-page h3{margin:0 0 9px}.report-page p{margin:7px 0;font-size:14px}.report-page small{color:#777}.report-page strong{color:#5d47af}@media print{.upload,#demo,#clear,#print,footer,.tag,section.card:first-of-type{display:none!important}body{background:white}.wrap{max-width:none}.card{box-shadow:none;border:0}.report-page{page-break-after:always;min-height:80vh}} </style></head><body><main class="wrap"><div class="tag">PRIVATE · ON-DEVICE ANALYTICS</div><h1>💜 우리 대화 연구소</h1><p>카카오톡 대화를 스마트폰 안에서 분석해요. 파일은 서버로 전송되지 않습니다.</p><section class="card"><h2>대화 가져오기</h2><p>카카오톡 대화 내보내기로 저장한 같은 1:1 채팅방에서 추출된 TXT 파일을 여러 개 선택하세요. 파일을 날짜순으로 합치고 겹치는 구간을 확인합니다.</p><label class="upload">TXT 파일 여러 개 선택<input id="file" type="file" accept=".txt,text/plain" multiple></label><button id="demo" class="secondary">가상 데이터로 체험하기</button><p class="muted">분석은 이 브라우저 안에서 실행되며, 원본은 별도로 저장하지 않습니다.</p><p id="status" role="status" aria-live="polite"></p><div id="fileSummary" class="muted"></div></section><section id="result" class="hidden"><div class="card"><h2>우리의 대화 요약</h2><div class="grid" id="metrics"></div><h3>메시지 참여 비율</h3><div id="split"></div></div><div class="card"><h2>대화 습관</h2><div id="patterns"></div></div><div class="card"><h2>자주 등장한 표현</h2><p class="muted">단어 출현 횟수이며 감정이나 책임을 판단하는 점수가 아닙니다.</p><div id="keywords"></div></div><div class="card"><h2>월별 대화량</h2><div id="months"></div></div><button id="clear" class="secondary">분석 결과 지우기</button></section><section id="report" class="card hidden"><h2>💌 우리의 대화 보고서</h2><p class="muted">실제 메시지 통계로 생성한 6개 섹션입니다. 감정·관계의 좋고 나쁨을 판정하지 않습니다.</p><div id="reportPages"></div><button id="print" class="secondary" type="button">보고서 인쇄 / PDF로 저장</button></section><footer>개인정보 안내: 외부 분석 API, 쿠키, 추적 스크립트, 서버 업로드 기능이 없습니다. 실제 파일은 기기 메모리에서만 처리합니다. 파일을 공유하거나 화면을 캡처할 때는 상대방의 동의를 확인하세요.</footer></main><script>
+'use strict';
+const $=id=>document.getElementById(id);const fmt=n=>n.toLocaleString('ko-KR');
+const rx1=/^\[(.+?)\]\s*\[(오전|오후)\s*(\d{1,2}):(\d{2})\]\s*(.*)$/;
+const rx2=/^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})[.]?\s*(오전|오후)\s*(\d{1,2}):(\d{2}),\s*(.+?)\s*:\s*(.*)$/;
+const rxDate=/^-{2,}\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일.*-{2,}$/;
+const rxDate2=/^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*.*$/;
+function time(y,m,d,ap,h,mi){h=Number(h)%12+(ap==='오후'?12:0);let dt=new Date(Number(y),Number(m)-1,Number(d),h,Number(mi));return Number.isNaN(dt.getTime())?null:dt;}
+function parse(text){let messages=[],date=null;for(let line of text.replace(/\r/g,'').split('\n')){let dm=line.match(rxDate)||line.match(rxDate2);if(dm){date=[+dm[1],+dm[2],+dm[3]];continue;}let a=line.match(rx1),b=line.match(rx2);if(a&&date){messages.push({who:a[1],date:time(...date,a[2],a[3],a[4]),body:a[5]});continue;}if(b){messages.push({who:b[7],date:time(b[1],b[2],b[3],b[4],b[5],b[6]),body:b[8]});continue;}if(messages.length&&line.trim()&&!/^(저장한 날짜|카카오톡 대화|Talk_)/.test(line))messages[messages.length-1].body+='\n'+line;}return messages.filter(x=>x.date&&x.who&&x.body).sort((a,b)=>a.date-b.date);}
+function demo(){let out=[],names=['민지','수빈'],texts=['오늘 어땠어?','점심 먹었어?','고마워 💜','보고 싶어','ㅋㅋㅋㅋ','오늘 좀 힘들었어','괜찮아?','미안해','사랑해','잘 자'];for(let d=0;d<75;d++)for(let i=0;i<7;i++){let t=new Date(2026,7,1+d,9+Math.floor(i*1.7),i*7%60);out.push({who:names[(d+i+Math.floor(d/3))%2],date:t,body:texts[(d*3+i*7)%texts.length]});}return out;}
+function analyze(ms){let names=[...new Set(ms.map(m=>m.who))];if(names.length!==2)throw Error('현재 버전은 두 사람의 1:1 대화만 지원합니다. 감지된 참여자: '+names.length+'명');let counts=names.map(n=>ms.filter(m=>m.who===n).length),days=new Set(ms.map(m=>m.date.toDateString())).size,monthly={},hourly=Array(24).fill(0),words={'애정 표현':/사랑해|좋아해|보고\s?싶|♥|❤️|💜|💕/g,'감사 표현':/고마워|고맙|감사해|감사합니다/g,'사과 표현':/미안해|미안|죄송/g,'안부 질문':/어땠어\?|괜찮아\?|밥\s?먹었|뭐해\?|잘\s?잤/g},hits={};for(let k in words)hits[k]=names.map(()=>0);ms.forEach(m=>{monthly[m.date.getFullYear()+'-'+String(m.date.getMonth()+1).padStart(2,'0')]=(monthly[m.date.getFullYear()+'-'+String(m.date.getMonth()+1).padStart(2,'0')]||0)+1;hourly[m.date.getHours()]++;for(let k in words){let matches=m.body.match(words[k]);hits[k][names.indexOf(m.who)]+=matches?matches.length:0;}});let initiations=[0,0],replies=[[],[]];for(let i=1;i<ms.length;i++){let gap=(ms[i].date-ms[i-1].date)/60000,idx=names.indexOf(ms[i].who);if(gap>=360)initiations[idx]++;if(ms[i].who!==ms[i-1].who&&gap>=0&&gap<=60)replies[idx].push(gap);}function median(a){if(!a.length)return null;a.sort((x,y)=>x-y);let mid=Math.floor(a.length/2);return a.length%2?a[mid]:(a[mid-1]+a[mid])/2;}return {names,counts,days,monthly,hourly,hits,initiations,replies:replies.map(median),total:ms.length,first:ms[0].date,last:ms.at(-1).date};}
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function metric(label,value){return `<div class="metric"><strong>${escapeHTML(value)}</strong><span>${escapeHTML(label)}</span></div>`;}
+function render(ms){let a=analyze(ms),pct=a.counts[0]/a.total*100;$('metrics').innerHTML=metric('총 메시지',fmt(a.total))+metric('대화한 날짜',fmt(a.days)+'일')+metric('첫 대화',a.first.toLocaleDateString('ko-KR'))+metric('마지막 대화',a.last.toLocaleDateString('ko-KR'));
+$('split').innerHTML=`<div class="bar"><div style="width:${pct}%"></div><div style="width:${100-pct}%"></div></div><div class="line"><span>${escapeHTML(a.names[0])} ${pct.toFixed(1)}%</span><span>${escapeHTML(a.names[1])} ${(100-pct).toFixed(1)}%</span></div>`;
+$('patterns').innerHTML=`<div class="line"><b>6시간 이상 공백 후 첫 메시지</b><span>${a.initiations.map((v,i)=>escapeHTML(a.names[i])+': '+fmt(v)+'회').join(' / ')}</span></div><div class="line"><b>답장 시간 중앙값</b><span>${a.replies.map((v,i)=>escapeHTML(a.names[i])+': '+(v===null?'자료 부족':v.toFixed(1)+'분')).join(' / ')}</span></div><p class="muted">답장 시간은 상대 메시지 이후 60분 이내에 화자가 바뀐 경우만 집계합니다. 선톡은 6시간 이상 공백 후 메시지라는 임의의 정의입니다.</p><div class="line"><b>가장 활발한 시간</b><span>${a.hourly.indexOf(Math.max(...a.hourly))}시</span></div>`;
+$('keywords').innerHTML=Object.entries(a.hits).map(([k,v])=>`<div class="line"><b>${escapeHTML(k)}</b><span>${a.names.map((n,i)=>escapeHTML(n)+' '+fmt(v[i])+'회').join(' · ')}</span></div>`).join('');let months=Object.entries(a.monthly).sort((x,y)=>x[0].localeCompare(y[0])),max=Math.max(...months.map(x=>x[1]));$('months').innerHTML=months.map(([m,n])=>`<div class="line"><span>${escapeHTML(m)}</span><b>${fmt(n)}개</b></div><div class="rowbar"><div style="width:${n/max*100}%"></div></div>`).join('');renderReport(a);$('result').classList.remove('hidden');$('status').textContent=`분석 완료 · ${fmt(a.total)}개 메시지`;}
+// Merge only matching ordered overlap at file boundaries. Equal messages elsewhere are retained.
+function messageKey(m){return [m.date.getTime(),m.who,m.body].join('\u0001');}
+function overlapLength(left,right){
+  const a=left.map(messageKey),b=right.map(messageKey),max=Math.min(a.length,b.length);
+  // KMP prefix-function on the second sequence, streamed over the first sequence.
+  const pi=new Int32Array(b.length);
+  for(let i=1,j=0;i<b.length;i++){while(j&&b[i]!==b[j])j=pi[j-1];if(b[i]===b[j])j++;pi[i]=j;}
+  let j=0;for(let i=0;i<a.length;i++){while(j&&a[i]!==b[j])j=pi[j-1];if(a[i]===b[j])j++;if(j===b.length&&i<a.length-1)j=pi[j-1];}
+  return Math.min(j,max);
+}
+function mergeFiles(parts){
+  // A file may contain the same exported conversation as another file, or a partial segment.
+  // Sort segments by first timestamp; preserve ordering of messages sharing timestamps.
+  parts.sort((a,b)=>a.messages[0].date-b.messages[0].date || a.messages.at(-1).date-b.messages.at(-1).date);
+  let merged=[],removed=0;
+  for(const part of parts){
+    const next=part.messages;
+    if(!merged.length){merged=next.slice();continue;}
+    const ol=overlapLength(merged,next);
+    removed+=ol;
+    for(let k=ol;k<next.length;k++)merged.push(next[k]);
+  }
+  // Multiple files may contain separate date ranges; sorting is safe for the statistics.
+  merged.sort((a,b)=>a.date-b.date);
+  return {messages:merged,removed};
+}
+$('file').addEventListener('change',async e=>{
+ const files=Array.from(e.target.files||[]);
+ if(!files.length)return;
+ $('status').className='';$('status').textContent='파일을 읽고 있습니다…';$('fileSummary').textContent='';
+ try{
+   if(files.length>60)throw Error('한 번에 최대 60개 파일을 선택할 수 있습니다.');
+   const totalSize=files.reduce((n,f)=>n+f.size,0);
+   if(totalSize>80*1024*1024)throw Error('선택한 파일 총합이 80MB를 초과합니다. 파일을 나누어 분석해주세요.');
+   let parts=[];
+   for(const f of files){
+     if(!/\.txt$/i.test(f.name))throw Error('TXT 파일만 선택해주세요: '+f.name);
+     let bytes=await f.arrayBuffer();
+     let utf=new TextDecoder('utf-8').decode(bytes),parsed=parse(utf);
+     if(!parsed.length){let kr=new TextDecoder('euc-kr').decode(bytes);parsed=parse(kr);}
+     if(!parsed.length)throw Error('메시지를 읽을 수 없는 파일이 있습니다: '+f.name);
+     parts.push({name:f.name,messages:parsed});
+   }
+   const speakers=new Set(parts.flatMap(p=>p.messages.map(m=>m.who)));
+   if(speakers.size!==2)throw Error('전체 파일에서 '+speakers.size+'명의 발신자가 확인되었습니다. 동일한 1:1 채팅방의 파일인지 확인해주세요.');
+   const {messages,removed}=mergeFiles(parts);
+   render(messages);
+   $('fileSummary').textContent=`${fmt(files.length)}개 파일 통합 · 겹치는 경계 메시지 ${fmt(removed)}개 제외 · 총 ${fmt(messages.length)}개 분석`;
+ }catch(err){$('result').classList.add('hidden');$('report').classList.add('hidden');$('status').textContent=err.message;$('status').className='error';}
+ finally{e.target.value='';}
+});
+$('demo').onclick=()=>{try{render(demo());$('status').className='';}catch(e){$('status').textContent=e.message;}};
+$('clear').onclick=()=>{$('result').classList.add('hidden');$('report').classList.add('hidden');$('reportPages').replaceChildren();$('fileSummary').textContent='';$('status').textContent='결과를 지웠습니다. 새로고침하면 메모리도 초기화됩니다.';};
+function renderReport(a){
+const [n1,n2]=a.names.map(escapeHTML), sum=a.counts[0]+a.counts[1], pct=(a.counts[0]/sum*100).toFixed(1);
+const peak=a.hourly.indexOf(Math.max(...a.hourly));const months=Object.entries(a.monthly).sort((x,y)=>x[0].localeCompare(y[0]));
+const biggest=months.reduce((x,y)=>y[1]>x[1]?y:x,months[0]);
+const word=(k)=>a.hits[k].map((x,i)=>`${escapeHTML(a.names[i])}: ${fmt(x)}회`).join(' · ');
+const page=(title,body,n)=>`<article class="report-page"><small>OUR CHAT REPORT · ${n}/6</small><h3>${title}</h3>${body}</article>`;
+const sections=[
+page('함께 남긴 대화',`<p><strong>${fmt(a.total)}개</strong>의 메시지가 기록되었어요.</p><p>${a.first.toLocaleDateString('ko-KR')}부터 ${a.last.toLocaleDateString('ko-KR')}까지, 메시지가 있었던 날은 ${fmt(a.days)}일이에요.</p>`,1),
+page('대화 참여 방식',`<p>${n1}: <strong>${pct}%</strong> (${fmt(a.counts[0])}개)</p><p>${n2}: <strong>${(100-Number(pct)).toFixed(1)}%</strong> (${fmt(a.counts[1])}개)</p><small>메시지 개수는 관심이나 애정의 크기를 의미하지 않습니다.</small>`,2),
+page('누가 먼저 말을 걸었을까?',`<p>6시간 이상 대화가 비어 있던 뒤 시작한 메시지</p><p>${n1}: <strong>${fmt(a.initiations[0])}회</strong></p><p>${n2}: <strong>${fmt(a.initiations[1])}회</strong></p><small>6시간 기준은 임의로 정한 분석 규칙입니다. 첫 번째 메시지는 집계하지 않습니다.</small>`,3),
+page('답장과 대화 리듬',`<p>답장 시간 중앙값 (상대 메시지 이후 60분 이내의 화자 전환)</p><p>${n1}: <strong>${a.replies[0]===null?'자료 부족':a.replies[0].toFixed(1)+'분'}</strong></p><p>${n2}: <strong>${a.replies[1]===null?'자료 부족':a.replies[1].toFixed(1)+'분'}</strong></p><p>메시지가 가장 많이 오간 시간대는 <strong>${peak}시</strong>예요.</p><small>연속 메시지, 수면, 업무 상황은 반영되지 않습니다.</small>`,4),
+page('서로 자주 쓴 표현',`<p>💗 애정 표현: ${word('애정 표현')}</p><p>🙏 감사 표현: ${word('감사 표현')}</p><p>🤝 사과 표현: ${word('사과 표현')}</p><p>💬 안부 질문: ${word('안부 질문')}</p><small>단순 키워드 출현 횟수로, 반어법이나 맥락을 구별하지 못합니다.</small>`,5),
+page('우리 대화의 시간표',`<p>분석된 월: <strong>${fmt(months.length)}개월</strong></p><p>메시지가 가장 많았던 달: <strong>${escapeHTML(biggest[0])}</strong> (${fmt(biggest[1])}개)</p><p>월별 대화량은 위 대시보드에서 확인할 수 있어요.</p><small>대화량의 증감만으로 관계의 변화를 단정할 수 없습니다. 분석 파일에 포함된 메시지만 집계합니다.</small>`,6)
+];$('reportPages').innerHTML=sections.join('');$('report').classList.remove('hidden');}
+$('print').onclick=()=>window.print();
+</script></body></html>
